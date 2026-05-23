@@ -1,0 +1,4 @@
+RewriteEngine On
+
+# /presentation/onboarding → onboarding.html
+RewriteRule ^onboarding/?$ onboarding.html [L]
