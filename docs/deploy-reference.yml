@@ -1,0 +1,157 @@
+name: Deploy MediSkill
+
+on:
+  push:
+    branches: 
+      - main
+      - '**'  # All branches
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - serverdev
+          - production
+
+concurrency:
+  group: mediskill-deploy-${{ github.event.inputs.environment && github.event.inputs.environment != 'auto' && github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'serverdev') }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    outputs:
+      target_env: ${{ steps.set-env.outputs.target_env }}
+      server_dir: ${{ steps.set-env.outputs.server_dir }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Determine target environment
+        id: set-env
+        run: |
+          # Manual override from workflow_dispatch
+          if [ "${{ github.event.inputs.environment }}" != "" ] && [ "${{ github.event.inputs.environment }}" != "auto" ]; then
+            TARGET_ENV="${{ github.event.inputs.environment }}"
+          # Main branch = production
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            TARGET_ENV="production"
+          # All other branches = serverdev
+          else
+            TARGET_ENV="serverdev"
+          fi
+          
+          if [ "$TARGET_ENV" == "production" ]; then
+            SERVER_DIR="mediskilldevsite"
+          else
+            SERVER_DIR="mediskilldevelopment"
+          fi
+          
+          echo "target_env=$TARGET_ENV" >> $GITHUB_OUTPUT
+          echo "server_dir=$SERVER_DIR" >> $GITHUB_OUTPUT
+          echo "Deploying to $TARGET_ENV environment ($SERVER_DIR/)"
+      
+      - name: Deploy Backend via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: ./backend/
+          server-dir: ${{ steps.set-env.outputs.server_dir }}/backend/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.DS_Store
+            **/logs/**
+            **/cache/**
+            **/*.log
+            **/vendor/**
+
+  deploy-frontend:
+    name: Build & Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, run-migrations]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+      
+      - name: Build for target environment
+        working-directory: ./frontend
+        run: |
+          if [ "${{ needs.deploy-backend.outputs.target_env }}" == "serverdev" ]; then
+            echo "Building for server development environment"
+            npm run build:serverdev
+          else
+            echo "Building for production environment"
+            npm run build
+          fi
+      
+      - name: Deploy Frontend via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: ./frontend/dist/
+          server-dir: ${{ needs.deploy-backend.outputs.server_dir }}/frontend/
+          exclude: |
+            **/.git*
+            **/.DS_Store
+
+  run-migrations:
+    name: Run Database Migrations
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+    timeout-minutes: 30
+    
+    steps:
+      - name: Allow backend deploy to settle
+        run: sleep 20
+
+      - name: Configure SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/mediskill_deploy_key
+          chmod 600 ~/.ssh/mediskill_deploy_key
+          ssh-keyscan -p 22 -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+      
+      - name: Run migrations via SSH
+        run: |
+          SERVER_DIR="${{ needs.deploy-backend.outputs.server_dir }}"
+          TARGET_ENV="${{ needs.deploy-backend.outputs.target_env }}"
+          REMOTE_BACKEND_DIR="/www/${SERVER_DIR}/backend"
+
+          echo "Running database migrations for $TARGET_ENV environment..."
+          ssh -i ~/.ssh/mediskill_deploy_key \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "cd '$REMOTE_BACKEND_DIR' && MEDISKILL_ENV='$TARGET_ENV' php database/run_migrations.php"
+          echo "Migrations completed successfully for $TARGET_ENV!"
