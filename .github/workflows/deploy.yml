@@ -1,0 +1,44 @@
+name: Deploy Presentation Site
+
+# Deploys ONLY to presentation/ on one.com.
+# Does NOT touch mediskilldevsite/ or mediskilldevelopment/.
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: mediskill-presentation-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to presentation/
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy static site via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: ./
+          server-dir: presentation/
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/docs/**
+            **/guides/**
+            **/.DS_Store
+            **/vercel.json
+            **/.gitignore
