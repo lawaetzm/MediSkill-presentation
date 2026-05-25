@@ -38,4 +38,4 @@ AI Mentor giver vejledning baseret på din progression — fx "Hvordan går det 
 
 ## Hjælp
 
-Problemer med login eller app? Kontakt ml@mediskill.dk eller din lokale uddannelsesansvarlige.
+Problemer med login eller app? Kontakt contact@mediskill.dk eller din lokale uddannelsesansvarlige.
