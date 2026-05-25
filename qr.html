@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download MediSkill</title>
+    <script>
+        (function () {
+            var ios = 'https://apps.apple.com/app/id6743761789';
+            var android = 'https://play.google.com/store/apps/details?id=com.mediskill.app';
+            var ua = navigator.userAgent || navigator.vendor || window.opera;
+
+            if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+                window.location.replace(ios);
+            } else if (/android/i.test(ua)) {
+                window.location.replace(android);
+            }
+        })();
+    </script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            padding: 40px 20px;
+            color: #333;
+        }
+        a {
+            display: inline-block;
+            margin: 10px;
+            padding: 14px 24px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Download MediSkill</h1>
+    <p>Vælg din platform:</p>
+    <a href="https://apps.apple.com/app/id6743761789">iPhone (App Store)</a>
+    <a href="https://play.google.com/store/apps/details?id=com.mediskill.app">Android (Google Play)</a>
+</body>
+</html>

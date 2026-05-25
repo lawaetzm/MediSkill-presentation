@@ -2,3 +2,6 @@ RewriteEngine On
 
 # /presentation/onboarding → onboarding.html
 RewriteRule ^onboarding/?$ onboarding.html [L]
+
+# /presentation/qr → qr.html (app download redirect)
+RewriteRule ^qr/?$ qr.html [L]
